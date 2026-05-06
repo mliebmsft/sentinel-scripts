@@ -148,7 +148,7 @@ if ($incidentAgeFilter -ne 'all') {
     $dateClause = (Get-Date).AddDays(-[int]$incidentAgeFilter).ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
 
-$filterClause = "&" + "$" + "filter=properties/status eq 'New'"
+$filterClause = "&" + "$" + "filter=properties/status ne 'Closed'"
 if ($dateClause) {
     $filterClause += " and properties/createdTimeUtc le " + $dateClause
 }
@@ -166,7 +166,11 @@ $incidents = $response.value
 foreach ($incident in $incidents) {
 
     #$incidentDate = $incident.properties.createdTimeUtc.ToString()
-    #$incidentStatus = $incident.properties.status.ToString()
+    $incidentStatus = [string]$incident.properties.status
+    $incidentStatus = $incidentStatus.Trim()
+    if ($incidentStatus.Equals('Closed', [System.StringComparison]::OrdinalIgnoreCase)) {
+        continue
+    }
     $targetUri = $incident.id.ToString()
     $title = $incident.properties.title.ToString() 
     $escapedTitle = $title -replace "'", ""
@@ -174,6 +178,11 @@ foreach ($incident in $incidents) {
     $targetUriWithProvider = "https://management.azure.com/" + $targetUri
 
     if ($incidentTitle -and -not $title.Equals($incidentTitle, [System.StringComparison]::OrdinalIgnoreCase)) {
+        continue
+    }
+
+    # Final safety gate: do not send PUT for incidents that are already closed.
+    if ($incidentStatus.Equals('Closed', [System.StringComparison]::OrdinalIgnoreCase)) {
         continue
     }
 
