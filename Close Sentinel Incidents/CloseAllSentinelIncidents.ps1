@@ -1,4 +1,6 @@
 param(
+    [ValidateSet('ClientSecret', 'Interactive', 'ManagedIdentity')]
+    [string]$authMode = "ClientSecret",
     [string]$tenantId = "",
     [string]$clientId = "",
     [string]$clientSecret = "",
@@ -9,19 +11,97 @@ param(
 )
 
 # Example:
-# powershell .\CloseAllSentinelIncidents.ps1 -tenantId "<tenant-id>" -clientId "<client-id>" -clientSecret "<client-secret>" -subscriptionId "<subscription-id>" -resourceGroupName "<resource-group-name>" -workspaceName "<workspace-name>" -incidentAgeFilter 90
+# Client secret auth:
+# powershell .\CloseAllSentinelIncidents.ps1 -authMode ClientSecret -tenantId "<tenant-id>" -clientId "<client-id>" -clientSecret "<client-secret>" -subscriptionId "<subscription-id>" -resourceGroupName "<resource-group-name>" -workspaceName "<workspace-name>" -incidentAgeFilter 90
+# Interactive auth:
+# powershell .\CloseAllSentinelIncidents.ps1 -authMode Interactive -subscriptionId "<subscription-id>" -resourceGroupName "<resource-group-name>" -workspaceName "<workspace-name>"
+# Managed identity auth:
+# powershell .\CloseAllSentinelIncidents.ps1 -authMode ManagedIdentity -subscriptionId "<subscription-id>" -resourceGroupName "<resource-group-name>" -workspaceName "<workspace-name>"
 # Use -incidentAgeFilter all to remove the date filter entirely.
 
 # Get a token
-$tokenUri = "https://login.microsoftonline.com/$tenantId/oauth2/token"
-$tokenBody = @{
-    'resource'      = "https://management.azure.com/"
-    'client_id'     = $clientId
-    'client_secret' = $clientSecret
-    'grant_type'    = "client_credentials"
+if (-not $subscriptionId) {
+    throw "subscriptionId is required."
 }
-$tokenResponse = Invoke-RestMethod -Uri $tokenUri -Method Post -Body $tokenBody
-$accessToken = $tokenResponse.access_token
+if (-not $resourceGroupName) {
+    throw "resourceGroupName is required."
+}
+if (-not $workspaceName) {
+    throw "workspaceName is required."
+}
+
+switch ($authMode) {
+    'ClientSecret' {
+        if (-not $tenantId) {
+            throw "tenantId is required when authMode is ClientSecret."
+        }
+        if (-not $clientId) {
+            throw "clientId is required when authMode is ClientSecret."
+        }
+        if (-not $clientSecret) {
+            throw "clientSecret is required when authMode is ClientSecret."
+        }
+
+        $tokenUri = "https://login.microsoftonline.com/$tenantId/oauth2/token"
+        $tokenBody = @{
+            'resource'      = "https://management.azure.com/"
+            'client_id'     = $clientId
+            'client_secret' = $clientSecret
+            'grant_type'    = "client_credentials"
+        }
+        $tokenResponse = Invoke-RestMethod -Uri $tokenUri -Method Post -Body $tokenBody
+        $accessToken = $tokenResponse.access_token
+    }
+    'Interactive' {
+        if (-not (Get-Module -ListAvailable -Name Az.Accounts)) {
+            throw "Az.Accounts module is required for Interactive auth. Install it with: Install-Module Az.Accounts -Scope CurrentUser"
+        }
+
+        if ($tenantId) {
+            Connect-AzAccount -Tenant $tenantId | Out-Null
+        }
+        else {
+            Connect-AzAccount | Out-Null
+        }
+
+        Set-AzContext -Subscription $subscriptionId | Out-Null
+        $token = Get-AzAccessToken -ResourceUrl "https://management.azure.com/"
+        if ($token.Token -is [System.Security.SecureString]) {
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($token.Token)
+            try {
+                $accessToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            }
+            finally {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+        }
+        else {
+            $accessToken = $token.Token
+        }
+    }
+    'ManagedIdentity' {
+        if (-not (Get-Module -ListAvailable -Name Az.Accounts)) {
+            throw "Az.Accounts module is required for ManagedIdentity auth. Install it with: Install-Module Az.Accounts -Scope CurrentUser"
+        }
+
+        Connect-AzAccount -Identity | Out-Null
+        Set-AzContext -Subscription $subscriptionId | Out-Null
+        $token = Get-AzAccessToken -ResourceUrl "https://management.azure.com/"
+        if ($token.Token -is [System.Security.SecureString]) {
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($token.Token)
+            try {
+                $accessToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            }
+            finally {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+        }
+        else {
+            $accessToken = $token.Token
+        }
+    }
+}
+
 $processedIncidents = 0
 
 # Get all incidents
