@@ -58,6 +58,8 @@ For `ClientSecret`, also collect Client ID and Client Secret.
 | `resourceGroupName` | string | Yes | `""` | Resource group that contains the workspace. |
 | `workspaceName` | string | Yes | `""` | Log Analytics workspace name linked to Sentinel. |
 | `incidentAgeFilter` | string | No | `"30"` | Number of days for age filtering, or `all` to disable date filtering. |
+| `incidentTitle` | string | No | `""` | Exact incident title filter (case-insensitive). Only incidents with this title are closed. |
+| `NoPrompt` | switch | No | not set | If set, missing required parameters throw immediately instead of prompting interactively. |
 
 Parameter requirements by auth mode:
 
@@ -115,6 +117,28 @@ powershell .\CloseAllSentinelIncidents.ps1 \
   -incidentAgeFilter all
 ```
 
+### Close only incidents with a specific title
+
+```powershell
+powershell .\CloseAllSentinelIncidents.ps1 \
+  -authMode Interactive \
+  -subscriptionId "<subscription-id>" \
+  -resourceGroupName "<resource-group-name>" \
+  -workspaceName "<workspace-name>" \
+  -incidentTitle "Impossible travel activity detected"
+```
+
+### Non-interactive mode for automation
+
+```powershell
+powershell .\CloseAllSentinelIncidents.ps1 \
+  -authMode ManagedIdentity \
+  -subscriptionId "<subscription-id>" \
+  -resourceGroupName "<resource-group-name>" \
+  -workspaceName "<workspace-name>" \
+  -NoPrompt
+```
+
 ## Example Output
 
 ```text
@@ -129,6 +153,7 @@ Next link:
 ## Notes and Behavior Details
 
 - Only incidents currently in `New` status are targeted.
+- If `incidentTitle` is provided, only `New` incidents with an exact title match are targeted (case-insensitive).
 - The script updates incidents with a full `PUT` request for selected properties.
 - Incident titles have single quotes removed before update to avoid malformed request bodies.
 - If an API rate-limit error message is detected, the script waits 60 seconds and retries.
@@ -144,6 +169,7 @@ Next link:
 - No incidents closed:
   - Confirm incidents are in `New` state.
   - Check `incidentAgeFilter` is not too restrictive.
+  - If `incidentTitle` is set, confirm it exactly matches the incident title text.
 - API throttling:
   - The script retries after 60 seconds on rate-limit errors.
 
