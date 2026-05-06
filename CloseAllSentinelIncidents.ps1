@@ -46,20 +46,12 @@ $incidents = $response.value
 
 # Loop through each incident and close it
 foreach ($incident in $incidents) {
-
-    #$incidentDate = $incident.properties.createdTimeUtc.ToString()
-    #$incidentStatus = $incident.properties.status.ToString()
     $targetUri = $incident.id.ToString()
     $title = $incident.properties.title.ToString() 
     $escapedTitle = $title -replace "'", ""
     $severity = $incident.properties.severity.ToString()
-
     $uri = "https://management.azure.com/" + $targetUri +"?api-version=2024-03-01"
-    #Write-Host "Title: $escapedTitle"
-    #Write-Host "Incident Status: $incidentStatus"
-    #Write-Host "Incident Date: $incidentDate"
     $body = "{'properties':{'status': 'Closed','title': '"+ $escapedTitle +"','severity': '"+ $severity +"','classification':'Undetermined','classificationComment':'Closed by script'}}"
-    #Write-Host "Body: $body"
     Invoke-RestMethod -Uri $uri -Headers $headers -Method Put -Body $body -ContentType "application/json" 
     $processedIncidents++
     Write-Host "$processedIncidents incidents closed"
