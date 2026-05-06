@@ -87,10 +87,10 @@ switch ($authMode) {
     'Interactive' {
         try {
             if ($tenantId) {
-                Connect-AzAccount -Tenant $tenantId -ErrorAction Stop | Out-Null
+                Connect-AzAccount -Tenant $tenantId -AuthScope "https://management.azure.com/" -ErrorAction Stop | Out-Null
             }
             else {
-                Connect-AzAccount -ErrorAction Stop | Out-Null
+                Connect-AzAccount -AuthScope "https://management.azure.com/" -ErrorAction Stop | Out-Null
             }
 
             Set-AzContext -Subscription $subscriptionId -ErrorAction Stop | Out-Null
